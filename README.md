@@ -2,14 +2,9 @@
 
 Raycast-Erweiterung zum Suchen und Kopieren von CSS-Variablen.
 
-## Installation
-
-1. Repository klonen oder in Raycast installieren
-2. In den Raycast-Einstellungen den Pfad zu deiner CSS-Datei angeben (oder eine URL)
-
 ## Verwendung
 
-Öffne Raycast und starte "CSS Variables Searcher". Die Erweiterung lädt automatisch deine CSS-Datei und zeigt alle `--variablen` an.
+Öffne Raycast und starte "CSS Variables Searcher". Die Erweiterung lädt deine eigene CSS-Datei – entweder von einem lokalen Pfad oder einer URL (je nach Konfiguration) – und zeigt alle `--variablen` an.
 
 ### Suche
 
