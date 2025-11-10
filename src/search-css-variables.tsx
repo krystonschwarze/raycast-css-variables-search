@@ -494,6 +494,18 @@ export default function Command() {
     });
   };
 
+  // Entferne Duplikate basierend auf Variablennamen
+  const removeDuplicates = (variables: CSSVariable[]): CSSVariable[] => {
+    const seen = new Set<string>();
+    return variables.filter(variable => {
+      if (seen.has(variable.name)) {
+        return false;
+      }
+      seen.add(variable.name);
+      return true;
+    });
+  };
+
   // Gruppiere Variablen nach Kategorien für Sektionen
   const groupVariablesByCategory = (variables: CSSVariable[]): { [category: string]: CSSVariable[] } => {
     const grouped: { [category: string]: CSSVariable[] } = {};
@@ -507,33 +519,6 @@ export default function Command() {
     });
     
     return grouped;
-  };
-
-  // Erstelle Sektionen mit Trennstrichen
-  const createSectionsWithSeparators = (variables: CSSVariable[]): (CSSVariable | { type: 'separator', category: string })[] => {
-    const grouped = groupVariablesByCategory(variables);
-    const sections: (CSSVariable | { type: 'separator', category: string })[] = [];
-    
-    // Sortiere Kategorien alphabetisch, aber "Alle" und "Andere" am Ende
-    const sortedCategories = Object.keys(grouped).sort((a, b) => {
-      if (a === 'Alle') return 1;
-      if (b === 'Alle') return -1;
-      if (a === 'Andere') return 1;
-      if (b === 'Andere') return -1;
-      return a.localeCompare(b);
-    });
-    
-    sortedCategories.forEach((category, index) => {
-      // Füge Trennstrich vor jeder Kategorie hinzu (außer der ersten)
-      if (index > 0) {
-        sections.push({ type: 'separator', category });
-      }
-      
-      // Füge alle Variablen dieser Kategorie hinzu
-      sections.push(...grouped[category]);
-    });
-    
-    return sections;
   };
 
   useEffect(() => {
@@ -611,64 +596,72 @@ export default function Command() {
         </List.Dropdown>
       }
     >
-      {createSectionsWithSeparators(filteredVariables).map((item, index) => {
-        // Prüfe ob es ein Trennstrich ist
-        if ('type' in item && item.type === 'separator') {
-          return (
-            <List.Section
-              key={`separator-${item.category}-${index}`}
-              title={item.category}
-            />
-          );
-        }
+      {(() => {
+        // Entferne Duplikate
+        const uniqueVariables = removeDuplicates(filteredVariables);
+        // Gruppiere nach Kategorien
+        const grouped = groupVariablesByCategory(uniqueVariables);
         
-        // Normale Variable
-        const variable = item as CSSVariable;
-        const isColor = isColorValue(variable.value);
-        const colorHex = isColor ? colorToHex(variable.value, cssVariables) : null;
-        const shouldShowColorPreview = preferences.showColorPreview && isColor;
+        // Sortiere Kategorien alphabetisch, aber "Alle" und "Andere" am Ende
+        const sortedCategories = Object.keys(grouped).sort((a, b) => {
+          if (a === 'Alle') return 1;
+          if (b === 'Alle') return -1;
+          if (a === 'Andere') return 1;
+          if (b === 'Andere') return -1;
+          return a.localeCompare(b);
+        });
         
-        return (
-          <List.Item
-            key={`${variable.name}-${index}`}
-            icon={shouldShowColorPreview ? { source: Icon.CircleFilled, tintColor: colorHex } : Icon.Code}
-            title={variable.name}
-            subtitle={variable.value}
-            keywords={[variable.name, variable.value]}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Variablenname kopieren"
-                  icon={Icon.Clipboard}
-                  onAction={() => copyVariableName(variable.name)}
-                  shortcut={{ modifiers: [], key: "enter" }}
+        return sortedCategories.map((category) => (
+          <List.Section key={category} title={category}>
+            {grouped[category].map((variable, index) => {
+              const isColor = isColorValue(variable.value);
+              const colorHex = isColor ? colorToHex(variable.value, cssVariables) : null;
+              const shouldShowColorPreview = preferences.showColorPreview && isColor;
+              
+              return (
+                <List.Item
+                  key={`${variable.name}-${index}`}
+                  icon={shouldShowColorPreview ? { source: Icon.CircleFilled, tintColor: colorHex } : Icon.Code}
+                  title={variable.name}
+                  subtitle={variable.value}
+                  keywords={[variable.name, variable.value]}
+                  actions={
+                    <ActionPanel>
+                      <Action
+                        title="Variablenname kopieren"
+                        icon={Icon.Clipboard}
+                        onAction={() => copyVariableName(variable.name)}
+                        shortcut={{ modifiers: [], key: "enter" }}
+                      />
+                      <Action
+                        title="Variablenname mit var() kopieren"
+                        icon={Icon.Clipboard}
+                        onAction={() => copyVariableNameWithVar(variable.name)}
+                        shortcut={{ modifiers: ["cmd"], key: "enter" }}
+                      />
+                      <Action
+                        title="Wert kopieren"
+                        icon={Icon.Clipboard}
+                        onAction={() => copyValue(variable.value, variable.name)}
+                      />
+                      <Action
+                        title="Einstellungen öffnen"
+                        icon={Icon.Gear}
+                        onAction={openSettings}
+                      />
+                      <Action
+                        title="Aktualisieren"
+                        icon={Icon.ArrowClockwise}
+                        onAction={loadCSSVariables}
+                      />
+                    </ActionPanel>
+                  }
                 />
-                <Action
-                  title="Variablenname mit var() kopieren"
-                  icon={Icon.Clipboard}
-                  onAction={() => copyVariableNameWithVar(variable.name)}
-                  shortcut={{ modifiers: ["cmd"], key: "enter" }}
-                />
-                <Action
-                  title="Wert kopieren"
-                  icon={Icon.Clipboard}
-                  onAction={() => copyValue(variable.value, variable.name)}
-                />
-                <Action
-                  title="Einstellungen öffnen"
-                  icon={Icon.Gear}
-                  onAction={openSettings}
-                />
-                <Action
-                  title="Aktualisieren"
-                  icon={Icon.ArrowClockwise}
-                  onAction={loadCSSVariables}
-                />
-              </ActionPanel>
-            }
-          />
-        );
-      })}
+              );
+            })}
+          </List.Section>
+        ));
+      })()}
     </List>
   );
 }
