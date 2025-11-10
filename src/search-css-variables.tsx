@@ -9,7 +9,7 @@ import {
   openExtensionPreferences,
   Clipboard,
 } from "@raycast/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import * as fs from "fs";
 import * as https from "https";
 import * as http from "http";
@@ -30,27 +30,26 @@ interface Preferences {
 interface CacheEntry {
   mtime: number;
   variables: CSSVariable[];
-  isUrl?: boolean;
-  url?: string;
+  isUrl: boolean;
 }
 
-// Einfacher Cache für die CSS-Variablen
+// Simple cache for CSS variables
 const cssCache: Map<string, CacheEntry> = new Map();
 
-// Hilfsfunktion um Kategorien basierend auf Präfix zu erkennen
+// Helper function to detect categories based on prefix
 const detectCategory = (variableName: string, filterPrefix: string): string => {
   if (!filterPrefix || filterPrefix.trim() === "") {
-    return "Alle";
+    return "All";
   }
 
   const prefix = filterPrefix.trim();
 
-  // Prüfe ob der Variablenname mit dem Präfix beginnt
+  // Check if the variable name starts with the prefix
   if (variableName.startsWith(prefix)) {
-    // Extrahiere den Teil nach dem Präfix
+    // Extract the part after the prefix
     const afterPrefix = variableName.substring(prefix.length);
 
-    // Finde das erste Wort nach dem Präfix (bis zum ersten Bindestrich oder Ende)
+    // Find the first word after the prefix (until the first dash or end)
     const firstWordMatch = afterPrefix.match(/^([a-zA-Z0-9]+)/);
     if (firstWordMatch) {
       const category = firstWordMatch[1];
@@ -58,23 +57,23 @@ const detectCategory = (variableName: string, filterPrefix: string): string => {
     }
   }
 
-  return "Andere";
+  return "Other";
 };
 
-// Hilfsfunktion um zu prüfen, ob ein Wert eine Farbe ist
+// Helper function to check if a value is a color
 const isColorValue = (value: string): boolean => {
   const trimmedValue = value.trim();
 
-  // Hex-Farben (#fff, #ffffff)
+  // Hex colors (#fff, #ffffff)
   if (/^#[0-9a-fA-F]{3,8}$/.test(trimmedValue)) return true;
 
-  // RGB/RGBA Farben
+  // RGB/RGBA colors
   if (/^rgba?\(/.test(trimmedValue)) return true;
 
-  // HSL/HSLA Farben
+  // HSL/HSLA colors
   if (/^hsla?\(/.test(trimmedValue)) return true;
 
-  // Named colors (nur grundlegende Farben)
+  // Named colors (only basic colors)
   const namedColors = [
     "red",
     "green",
@@ -93,17 +92,35 @@ const isColorValue = (value: string): boolean => {
   ];
   if (namedColors.includes(trimmedValue.toLowerCase())) return true;
 
-  // CSS-Variablen die auf Farben verweisen (Aliases)
+  // CSS variables that reference colors (aliases)
   if (/^var\(--/.test(trimmedValue)) return true;
 
   return false;
 };
 
-// Hilfsfunktion um eine Farbe in einen Hex-Wert zu konvertieren
+// Named colors to hex mapping (outside function for better performance)
+const COLOR_MAP: { [key: string]: string } = {
+  red: "#ff0000",
+  green: "#008000",
+  blue: "#0000ff",
+  yellow: "#ffff00",
+  orange: "#ffa500",
+  purple: "#800080",
+  pink: "#ffc0cb",
+  brown: "#a52a2a",
+  black: "#000000",
+  white: "#ffffff",
+  gray: "#808080",
+  grey: "#808080",
+  transparent: "transparent",
+  currentcolor: "currentColor",
+};
+
+// Helper function to convert a color to a hex value
 const colorToHex = (value: string, cssVariables?: CSSVariable[]): string => {
   const trimmedValue = value.trim();
 
-  // CSS-Variablen-Alias (var(--variable-name))
+  // CSS variable alias (var(--variable-name))
   if (/^var\(--/.test(trimmedValue)) {
     const varMatch = trimmedValue.match(/var\(--([^)]+)\)/);
     if (varMatch && cssVariables) {
@@ -113,19 +130,19 @@ const colorToHex = (value: string, cssVariables?: CSSVariable[]): string => {
         return colorToHex(referencedVar.value, cssVariables);
       }
     }
-    return "#000000"; // Fallback für unbekannte Variablen
+    return "#000000";
   }
 
-  // Bereits Hex-Farbe
+  // Already hex color
   if (/^#[0-9a-fA-F]{3,8}$/.test(trimmedValue)) {
-    // 3-stellige Hex zu 6-stellig konvertieren
+    // Convert 3-digit hex to 6-digit
     if (trimmedValue.length === 4) {
       return `#${trimmedValue[1]}${trimmedValue[1]}${trimmedValue[2]}${trimmedValue[2]}${trimmedValue[3]}${trimmedValue[3]}`;
     }
     return trimmedValue.toLowerCase();
   }
 
-  // RGB zu Hex
+  // RGB to hex
   const rgbMatch = trimmedValue.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (rgbMatch) {
     const r = parseInt(rgbMatch[1]);
@@ -134,42 +151,29 @@ const colorToHex = (value: string, cssVariables?: CSSVariable[]): string => {
     return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   }
 
-  // HSL zu Hex (vereinfacht)
+  // HSL to hex
   const hslMatch = trimmedValue.match(/^hsla?\((\d+),\s*(\d+)%,\s*(\d+)%/);
   if (hslMatch) {
     const h = parseInt(hslMatch[1]);
     const s = parseInt(hslMatch[2]);
     const l = parseInt(hslMatch[3]);
-    // Vereinfachte HSL zu RGB Konvertierung
     const c = ((1 - Math.abs((2 * l) / 100 - 1)) * s) / 100;
     const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
     const m = l / 100 - c / 2;
     let r, g, b;
 
     if (h < 60) {
-      r = c;
-      g = x;
-      b = 0;
+      [r, g, b] = [c, x, 0];
     } else if (h < 120) {
-      r = x;
-      g = c;
-      b = 0;
+      [r, g, b] = [x, c, 0];
     } else if (h < 180) {
-      r = 0;
-      g = c;
-      b = x;
+      [r, g, b] = [0, c, x];
     } else if (h < 240) {
-      r = 0;
-      g = x;
-      b = c;
+      [r, g, b] = [0, x, c];
     } else if (h < 300) {
-      r = x;
-      g = 0;
-      b = c;
+      [r, g, b] = [x, 0, c];
     } else {
-      r = c;
-      g = 0;
-      b = x;
+      [r, g, b] = [c, 0, x];
     }
 
     r = Math.round((r + m) * 255);
@@ -179,85 +183,88 @@ const colorToHex = (value: string, cssVariables?: CSSVariable[]): string => {
     return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   }
 
-  // Named colors zu Hex (nur grundlegende Farben)
-  const colorMap: { [key: string]: string } = {
-    red: "#ff0000",
-    green: "#008000",
-    blue: "#0000ff",
-    yellow: "#ffff00",
-    orange: "#ffa500",
-    purple: "#800080",
-    pink: "#ffc0cb",
-    brown: "#a52a2a",
-    black: "#000000",
-    white: "#ffffff",
-    gray: "#808080",
-    grey: "#808080",
-    transparent: "transparent",
-    currentColor: "currentColor",
-  };
-
-  return colorMap[trimmedValue.toLowerCase()] || "#000000";
+  // Named colors
+  return COLOR_MAP[trimmedValue.toLowerCase()] || "#000000";
 };
 
-// Hilfsfunktion zum Laden von URLs
+// Helper function to load URLs
 const fetchUrl = (url: string): Promise<string> => {
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const isHttps = urlObj.protocol === "https:";
-    const client = isHttps ? https : http;
+    try {
+      const urlObj = new URL(url);
+      const isHttps = urlObj.protocol === "https:";
+      const client = isHttps ? https : http;
 
-    const options = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (isHttps ? 443 : 80),
-      path: urlObj.pathname + urlObj.search,
-      method: "GET",
-      headers: {
-        "User-Agent": "CSS Variables Searcher/1.0",
-      },
-    };
+      const options: https.RequestOptions | http.RequestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (isHttps ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method: "GET",
+        headers: {
+          "User-Agent": "CSS Variables Searcher/1.0",
+          Accept: "text/css,text/plain,*/*",
+        },
+      };
 
-    const req = client.request(options, (res) => {
-      if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          resolve(data);
-        });
-      } else {
-        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+      // For HTTPS, add SSL options
+      if (isHttps) {
+        (options as https.RequestOptions).rejectUnauthorized = true;
       }
-    });
 
-    req.on("error", (err) => {
-      reject(err);
-    });
+      const req = client.request(options, (res) => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          let data = "";
+          res.on("data", (chunk) => {
+            data += chunk;
+          });
+          res.on("end", () => {
+            if (data.length === 0) {
+              reject(new Error("Empty response from server"));
+            } else {
+              resolve(data);
+            }
+          });
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || "Unknown error"}`));
+        }
+      });
 
-    req.setTimeout(10000, () => {
-      req.destroy();
-      reject(new Error("Request timeout"));
-    });
+      req.on("error", (err) => {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        reject(new Error(`Network error: ${errorMsg}`));
+      });
 
-    req.end();
+      req.setTimeout(15000, () => {
+        req.destroy();
+        reject(new Error("Request timeout after 15 seconds"));
+      });
+
+      req.end();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      reject(new Error(`Invalid URL or connection error: ${errorMsg}`));
+    }
   });
 };
 
 export default function Command() {
+  const preferences = getPreferenceValues<Preferences>();
+
   const [cssVariables, setCssVariables] = useState<CSSVariable[]>([]);
   const [filteredVariables, setFilteredVariables] = useState<CSSVariable[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>("Alle");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchText, setSearchText] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
-  const preferences = getPreferenceValues<Preferences>();
+  // Determine onboarding state immediately (synchronously)
+  const hasPreferences = Boolean(preferences.cssFilePath || preferences.cssFileUrl);
 
   const parseCSSVariables = (cssContent: string): CSSVariable[] => {
     const variables: CSSVariable[] = [];
 
-    // CSS-Variablen parsen
+    // Parse CSS variables
     const cssRegex = /(?:(--[a-zA-Z0-9-]+)\s*:\s*([^;]+);?)/g;
     let match;
 
@@ -276,12 +283,12 @@ export default function Command() {
       setIsLoading(true);
       setError(null);
 
-      // Prüfe, ob mindestens eine Quelle konfiguriert ist
+      // Check if at least one source is configured
       if (!preferences.cssFilePath && !preferences.cssFileUrl) {
-        throw new Error("Bitte konfigurieren Sie entweder einen CSS-Dateipfad oder eine CSS-URL in den Einstellungen");
+        throw new Error("Please configure either a CSS file path or a CSS URL in the settings");
       }
 
-      // Priorisiere lokale Datei über URL
+      // Prioritize local file over URL
       const useLocalFile = preferences.cssFilePath && preferences.cssFilePath.trim() !== "";
       const useUrl = !useLocalFile && preferences.cssFileUrl && preferences.cssFileUrl.trim() !== "";
 
@@ -290,15 +297,15 @@ export default function Command() {
       } else if (useUrl) {
         await loadFromUrl();
       } else {
-        throw new Error("Bitte konfigurieren Sie entweder einen CSS-Dateipfad oder eine CSS-URL in den Einstellungen");
+        throw new Error("Please configure either a CSS file path or a CSS URL in the settings");
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unbekannter Fehler";
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
 
       await showToast({
         style: Toast.Style.Failure,
-        title: "Fehler beim Laden der CSS-Datei",
+        title: "Error loading CSS file",
         message: errorMessage,
       });
     } finally {
@@ -308,31 +315,31 @@ export default function Command() {
 
   const loadFromLocalFile = async () => {
     if (!preferences.cssFilePath) {
-      throw new Error("CSS-Dateipfad ist nicht konfiguriert");
+      throw new Error("CSS file path is not configured");
     }
 
-    // Prüfe, ob der Pfad existiert
+    // Check if the path exists
     if (!fs.existsSync(preferences.cssFilePath)) {
-      throw new Error(`CSS-Datei nicht gefunden: ${preferences.cssFilePath}`);
+      throw new Error(`CSS file not found: ${preferences.cssFilePath}`);
     }
 
-    // Prüfe Cache
     const stats = fs.statSync(preferences.cssFilePath);
     const cachedEntry = cssCache.get(preferences.cssFilePath);
 
-    if (cachedEntry && cachedEntry.mtime === stats.mtime.getTime() && !cachedEntry.isUrl) {
+    // Check if cached version is still valid
+    if (cachedEntry && !cachedEntry.isUrl && cachedEntry.mtime === stats.mtime.getTime()) {
       setCssVariables(cachedEntry.variables);
       return;
     }
 
-    // Lese CSS-Datei
+    // Read and parse CSS file
     const cssContent = fs.readFileSync(preferences.cssFilePath, "utf-8");
     const variables = parseCSSVariables(cssContent);
 
-    // Aktualisiere Cache
+    // Update cache
     cssCache.set(preferences.cssFilePath, {
       mtime: stats.mtime.getTime(),
-      variables: variables,
+      variables,
       isUrl: false,
     });
 
@@ -341,42 +348,40 @@ export default function Command() {
     if (variables.length === 0) {
       await showToast({
         style: Toast.Style.Animated,
-        title: "Keine CSS-Variablen gefunden",
-        message: "Die CSS-Datei enthält keine benutzerdefinierten Eigenschaften (--variablen)",
+        title: "No CSS variables found",
+        message: "The CSS file does not contain any custom properties (--variables)",
       });
     }
   };
 
   const loadFromUrl = async () => {
     if (!preferences.cssFileUrl) {
-      throw new Error("CSS-URL ist nicht konfiguriert");
+      throw new Error("CSS URL is not configured");
     }
 
-    // Validiere URL
+    // Validate URL format
     try {
       new URL(preferences.cssFileUrl);
     } catch {
-      throw new Error("Ungültige URL-Format");
+      throw new Error("Invalid URL format");
     }
 
-    // Prüfe Cache (für URLs verwenden wir einen einfachen Cache ohne mtime)
+    // Check cache
     const cachedEntry = cssCache.get(preferences.cssFileUrl);
-
     if (cachedEntry && cachedEntry.isUrl) {
       setCssVariables(cachedEntry.variables);
       return;
     }
 
-    // Lade CSS von URL
+    // Load and parse CSS from URL
     const cssContent = await fetchUrl(preferences.cssFileUrl);
     const variables = parseCSSVariables(cssContent);
 
-    // Aktualisiere Cache
+    // Update cache
     cssCache.set(preferences.cssFileUrl, {
-      mtime: Date.now(), // Für URLs verwenden wir aktuelle Zeit
-      variables: variables,
+      mtime: Date.now(),
+      variables,
       isUrl: true,
-      url: preferences.cssFileUrl,
     });
 
     setCssVariables(variables);
@@ -384,95 +389,65 @@ export default function Command() {
     if (variables.length === 0) {
       await showToast({
         style: Toast.Style.Animated,
-        title: "Keine CSS-Variablen gefunden",
-        message: "Die CSS-Datei enthält keine benutzerdefinierten Eigenschaften (--variablen)",
+        title: "No CSS variables found",
+        message: "The CSS file does not contain any custom properties (--variables)",
       });
     }
   };
 
-  const copyVariableName = async (variableName: string) => {
+  const copyToClipboard = async (text: string, successTitle: string, successMessage: string) => {
     try {
-      await Clipboard.copy(variableName);
+      await Clipboard.copy(text);
       await showToast({
         style: Toast.Style.Success,
-        title: "Variablenname kopiert",
-        message: variableName,
+        title: successTitle,
+        message: successMessage,
       });
     } catch {
       await showToast({
         style: Toast.Style.Failure,
-        title: "Fehler beim Kopieren",
-        message: "Konnte nicht in die Zwischenablage kopieren",
+        title: "Error copying",
+        message: "Could not copy to clipboard",
       });
     }
   };
 
-  const copyVariableNameWithVar = async (variableName: string) => {
-    try {
-      const varFormat = `var(${variableName})`;
-      await Clipboard.copy(varFormat);
-      await showToast({
-        style: Toast.Style.Success,
-        title: "Variablenname mit var() kopiert",
-        message: varFormat,
-      });
-    } catch {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Fehler beim Kopieren",
-        message: "Konnte nicht in die Zwischenablage kopieren",
-      });
-    }
-  };
+  const copyVariableName = (variableName: string) =>
+    copyToClipboard(variableName, "Variable name copied", variableName);
 
-  const copyValue = async (value: string, variableName: string) => {
-    try {
-      await Clipboard.copy(value);
-      await showToast({
-        style: Toast.Style.Success,
-        title: "Wert kopiert",
-        message: `${variableName}: ${value}`,
-      });
-    } catch {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Fehler beim Kopieren",
-        message: "Konnte nicht in die Zwischenablage kopieren",
-      });
-    }
-  };
+  const copyVariableNameWithVar = (variableName: string) =>
+    copyToClipboard(`var(${variableName})`, "Variable name with var() copied", `var(${variableName})`);
 
-  const openSettings = () => {
-    openExtensionPreferences();
-  };
+  const copyValue = (value: string, variableName: string) =>
+    copyToClipboard(value, "Value copied", `${variableName}: ${value}`);
 
-  // Funktion um verfügbare Kategorien zu extrahieren
+  // Function to extract available categories
   const getAvailableCategories = (variables: CSSVariable[]): string[] => {
     const categories = new Set<string>();
-    categories.add("Alle");
+    categories.add("All");
     variables.forEach((variable) => {
-      if (variable.category && variable.category !== "Alle") {
+      if (variable.category && variable.category !== "All") {
         categories.add(variable.category);
       }
     });
     return Array.from(categories).sort();
   };
 
-  // Funktion um Variablen nach Kategorie zu filtern
+  // Function to filter variables by category
   const filterVariablesByCategory = (variables: CSSVariable[], category: string): CSSVariable[] => {
-    if (category === "Alle") {
+    if (category === "All") {
       return variables;
     }
     return variables.filter((variable) => variable.category === category);
   };
 
-  // Erweiterte Suchfunktion mit mehreren Suchbegriffen
+  // Advanced search function with multiple search terms
   const advancedSearch = (variables: CSSVariable[], searchQuery: string): CSSVariable[] => {
     if (!searchQuery || searchQuery.trim() === "") {
       return variables;
     }
 
-    // Teile die Suchanfrage in einzelne Wörter auf
+    // Split the search query into individual words
     const searchTerms = searchQuery
       .toLowerCase()
       .split(/\s+/)
@@ -481,12 +456,12 @@ export default function Command() {
     return variables.filter((variable) => {
       const searchableText = `${variable.name} ${variable.value}`.toLowerCase();
 
-      // Alle Suchbegriffe müssen gefunden werden (AND-Logik)
+      // All search terms must be found (AND logic)
       return searchTerms.every((term) => searchableText.includes(term));
     });
   };
 
-  // Entferne Duplikate basierend auf Variablennamen
+  // Remove duplicates based on variable names
   const removeDuplicates = (variables: CSSVariable[]): CSSVariable[] => {
     const seen = new Set<string>();
     return variables.filter((variable) => {
@@ -498,12 +473,12 @@ export default function Command() {
     });
   };
 
-  // Gruppiere Variablen nach Kategorien für Sektionen
+  // Group variables by categories for sections
   const groupVariablesByCategory = (variables: CSSVariable[]): { [category: string]: CSSVariable[] } => {
     const grouped: { [category: string]: CSSVariable[] } = {};
 
     variables.forEach((variable) => {
-      const category = variable.category || "Andere";
+      const category = variable.category || "Other";
       if (!grouped[category]) {
         grouped[category] = [];
       }
@@ -513,28 +488,82 @@ export default function Command() {
     return grouped;
   };
 
+  // Load CSS variables on mount if preferences are configured
   useEffect(() => {
-    loadCSSVariables();
+    if (hasPreferences) {
+      loadCSSVariables().finally(() => setInitialized(true));
+    } else {
+      setIsLoading(false);
+      setInitialized(true);
+    }
   }, []);
 
+  // Filter variables by category and search text
   useEffect(() => {
-    // Erst nach Kategorie filtern
     const categoryFiltered = filterVariablesByCategory(cssVariables, selectedCategory);
-    // Dann nach Suchtext filtern
     const searchFiltered = advancedSearch(categoryFiltered, searchText);
     setFilteredVariables(searchFiltered);
   }, [cssVariables, selectedCategory, searchText]);
+
+  // Memoize available categories to avoid recalculation
+  const availableCategories = useMemo(() => getAvailableCategories(cssVariables), [cssVariables]);
+
+  // Memoize grouped variables to avoid recalculation on every render
+  const groupedVariables = useMemo(() => {
+    const uniqueVariables = removeDuplicates(filteredVariables);
+    const grouped = groupVariablesByCategory(uniqueVariables);
+
+    // Sort categories alphabetically, but "All" and "Other" at the end
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+      if (a === "All") return 1;
+      if (b === "All") return -1;
+      if (a === "Other") return 1;
+      if (b === "Other") return -1;
+      return a.localeCompare(b);
+    });
+
+    return { grouped, sortedCategories };
+  }, [filteredVariables]);
+
+  // Show loading until initialized
+  if (!initialized) {
+    return <List isLoading={true} />;
+  }
+
+  // Show onboarding screen if no configuration
+  if (!hasPreferences) {
+    return (
+      <List>
+        <List.EmptyView
+          icon={Icon.Document}
+          title="Welcome to CSS Variables Searcher"
+          description="Configure your CSS file source to get started. After saving the settings, reopen the extension."
+          actions={
+            <ActionPanel>
+              <Action
+                title="Open Settings"
+                icon={Icon.Gear}
+                onAction={() => {
+                  openExtensionPreferences();
+                }}
+              />
+            </ActionPanel>
+          }
+        />
+      </List>
+    );
+  }
 
   if (error) {
     return (
       <List>
         <List.Item
           icon={Icon.ExclamationMark}
-          title="Fehler beim Laden der CSS-Datei"
+          title="Error loading CSS file"
           subtitle={error}
           actions={
             <ActionPanel>
-              <Action title="Open Settings" icon={Icon.Gear} onAction={openSettings} />
+              <Action title="Open Settings" icon={Icon.Gear} onAction={openExtensionPreferences} />
               <Action title="Retry" icon={Icon.ArrowClockwise} onAction={loadCSSVariables} />
             </ActionPanel>
           }
@@ -543,79 +572,61 @@ export default function Command() {
     );
   }
 
-  const availableCategories = getAvailableCategories(cssVariables);
-
   return (
     <List
-      isLoading={isLoading}
-      searchBarPlaceholder="CSS-Variablen durchsuchen... (z.B. 'foreground primary', 'background color')"
+      isLoading={isLoading || !initialized}
+      searchBarPlaceholder="Search CSS variables... (e.g. 'foreground primary', 'background color')"
       onSearchTextChange={setSearchText}
       searchBarAccessory={
-        <List.Dropdown tooltip="Kategorie filtern" value={selectedCategory} onChange={setSelectedCategory}>
+        <List.Dropdown tooltip="Filter by category" value={selectedCategory} onChange={setSelectedCategory}>
           {availableCategories.map((category) => (
             <List.Dropdown.Item key={category} title={category} value={category} />
           ))}
         </List.Dropdown>
       }
     >
-      {(() => {
-        // Entferne Duplikate
-        const uniqueVariables = removeDuplicates(filteredVariables);
-        // Gruppiere nach Kategorien
-        const grouped = groupVariablesByCategory(uniqueVariables);
+      {groupedVariables.sortedCategories.map((category) => (
+        <List.Section key={category} title={category}>
+          {groupedVariables.grouped[category].map((variable, index) => {
+            const isColor = isColorValue(variable.value);
+            const colorHex = isColor ? colorToHex(variable.value, cssVariables) : null;
+            const shouldShowColorPreview = preferences.showColorPreview && isColor;
 
-        // Sortiere Kategorien alphabetisch, aber "Alle" und "Andere" am Ende
-        const sortedCategories = Object.keys(grouped).sort((a, b) => {
-          if (a === "Alle") return 1;
-          if (b === "Alle") return -1;
-          if (a === "Andere") return 1;
-          if (b === "Andere") return -1;
-          return a.localeCompare(b);
-        });
-
-        return sortedCategories.map((category) => (
-          <List.Section key={category} title={category}>
-            {grouped[category].map((variable, index) => {
-              const isColor = isColorValue(variable.value);
-              const colorHex = isColor ? colorToHex(variable.value, cssVariables) : null;
-              const shouldShowColorPreview = preferences.showColorPreview && isColor;
-
-              return (
-                <List.Item
-                  key={`${variable.name}-${index}`}
-                  icon={shouldShowColorPreview ? { source: Icon.CircleFilled, tintColor: colorHex } : Icon.Code}
-                  title={variable.name}
-                  subtitle={variable.value}
-                  keywords={[variable.name, variable.value]}
-                  actions={
-                    <ActionPanel>
-                      <Action
-                        title="Copy Variable Name"
-                        icon={Icon.Clipboard}
-                        onAction={() => copyVariableName(variable.name)}
-                      />
-                      <Action
-                        title="Copy Variable Name with Var()"
-                        icon={Icon.Clipboard}
-                        onAction={() => copyVariableNameWithVar(variable.name)}
-                        shortcut={{ modifiers: ["shift"], key: "enter" }}
-                      />
-                      <Action
-                        title="Copy Value"
-                        icon={Icon.Clipboard}
-                        onAction={() => copyValue(variable.value, variable.name)}
-                        shortcut={{ modifiers: ["cmd", "shift"], key: "enter" }}
-                      />
-                      <Action title="Open Settings" icon={Icon.Gear} onAction={openSettings} />
-                      <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={loadCSSVariables} />
-                    </ActionPanel>
-                  }
-                />
-              );
-            })}
-          </List.Section>
-        ));
-      })()}
+            return (
+              <List.Item
+                key={`${variable.name}-${index}`}
+                icon={shouldShowColorPreview ? { source: Icon.CircleFilled, tintColor: colorHex } : Icon.Code}
+                title={variable.name}
+                subtitle={variable.value}
+                keywords={[variable.name, variable.value]}
+                actions={
+                  <ActionPanel>
+                    <Action
+                      title="Copy Variable Name"
+                      icon={Icon.Clipboard}
+                      onAction={() => copyVariableName(variable.name)}
+                    />
+                    <Action
+                      title="Copy Variable Name with Var()"
+                      icon={Icon.Clipboard}
+                      onAction={() => copyVariableNameWithVar(variable.name)}
+                      shortcut={{ modifiers: ["shift"], key: "enter" }}
+                    />
+                    <Action
+                      title="Copy Value"
+                      icon={Icon.Clipboard}
+                      onAction={() => copyValue(variable.value, variable.name)}
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "enter" }}
+                    />
+                    <Action title="Open Settings" icon={Icon.Gear} onAction={openExtensionPreferences} />
+                    <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={loadCSSVariables} />
+                  </ActionPanel>
+                }
+              />
+            );
+          })}
+        </List.Section>
+      ))}
     </List>
   );
 }

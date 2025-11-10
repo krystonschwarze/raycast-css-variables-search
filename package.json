@@ -20,16 +20,17 @@
       "name": "cssFilePath",
       "title": "CSS File Path",
       "description": "Path to the CSS file containing custom properties",
-      "type": "directory",
-      "required": false
+      "type": "textfield",
+      "required": false,
+      "placeholder": "/path/to/your/styles.css"
     },
     {
       "name": "cssFileUrl",
       "title": "CSS File URL",
-      "description": "URL to a hosted CSS file containing custom properties",
+      "description": "URL to a hosted CSS file containing custom properties (e.g., https://example.com/path/to/your/styles.css)",
       "type": "textfield",
-      "required": true,
-      "placeholder": "https://example.com/styles.css"
+      "required": false,
+      "placeholder": "https:///example.com/path/to/your/styles.css"
     },
     {
       "name": "showColorPreview",
