@@ -27,10 +27,10 @@
     {
       "name": "cssFileUrl",
       "title": "CSS File URL",
-      "description": "URL to a hosted CSS file containing custom properties (e.g., https://example.com/path/to/your/styles.css)",
+      "description": "URL to a hosted CSS file containing custom properties (e.g., https://example.com/styles.css)",
       "type": "textfield",
       "required": false,
-      "placeholder": "https:///example.com/path/to/your/styles.css"
+      "placeholder": "https://example.com/styles.css"
     },
     {
       "name": "showColorPreview",
