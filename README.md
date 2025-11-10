@@ -27,11 +27,11 @@ Eine Raycast-Erweiterung zum Durchsuchen und Kopieren von CSS-Variablen aus Ihre
 4. Durchsuchen Sie Ihre CSS-Variablen mit erweiterten Suchbegriffen:
    - **Einzelne Begriffe**: `primary`, `color`, `spacing`
    - **Mehrere Begriffe**: `foreground primary`, `background color`, `font size`
-   - **Kombinierte Suche**: `sui color primary` (findet alle Variablen, die alle drei Begriffe enthalten)
+   - **Kombinierte Suche**: `enc color primary` (findet alle Variablen, die alle drei Begriffe enthalten)
 5. Verwenden Sie die Tastenkombinationen oder Aktionen:
-   - **Enter**: Kopiert den Variablennamen (z.B. `--primary-color`)
-   - **Cmd+Enter**: Kopiert den Variablennamen mit var() Format (z.B. `var(--primary-color)`)
-   - **Wert kopieren**: Kopiert den CSS-Variablenwert (z.B. `#336699`)
+   - **Enter**: Kopiert den Variablennamen (z.B. `--primary-color`) - automatisch für die erste Action
+   - **Shift+Enter**: Kopiert den Variablennamen mit var() Format (z.B. `var(--primary-color)`)
+   - **Cmd+Shift+Enter**: Kopiert den CSS-Variablenwert (z.B. `#336699`)
    - **Einstellungen öffnen**: Öffnet die Erweiterungseinstellungen
    - **Aktualisieren**: Lädt die CSS-Datei erneut
 
@@ -50,7 +50,7 @@ Geben Sie eine URL zu einer gehosteten CSS-Datei an. Die Erweiterung lädt die D
 ### Zusätzliche Einstellungen
 
 - **Show Color Preview**: Aktivieren/deaktivieren Sie die farbigen Kreis-Icons für CSS-Farbwerte (Standard: aktiviert)
-- **Filter Prefix**: Präfix für die Kategorisierung (z.B. `--sui-`, `--theme-`)
+- **Filter Prefix**: Präfix für die Kategorisierung (z.B. `--enc-`, `--theme-`)
 
 CSS-Variablen werden durch das `--` Präfix definiert:
 
@@ -60,21 +60,21 @@ CSS-Variablen werden durch das `--` Präfix definiert:
   --font-size-base: 1rem;
   --spacing-4: 1rem;
   
-  /* Mit Präfix --sui- für Kategorisierung */
-  --sui-background-primary: #ffffff;
-  --sui-background-secondary: #f8f9fa;
-  --sui-color-primary: #336699;
-  --sui-color-secondary: #6c757d;
-  --sui-spacing-small: 0.5rem;
-  --sui-spacing-medium: 1rem;
-  --sui-spacing-large: 1.5rem;
+  /* Mit Präfix --enc- für Kategorisierung */
+  --enc-background-primary: #ffffff;
+  --enc-background-secondary: #f8f9fa;
+  --enc-color-primary: #336699;
+  --enc-color-secondary: #6c757d;
+  --enc-spacing-small: 0.5rem;
+  --enc-spacing-medium: 1rem;
+  --enc-spacing-large: 1.5rem;
 }
 ```
 
-**Beispiel mit Präfix `--sui-`:**
-- `--sui-background-primary` → Kategorie: "Background"
-- `--sui-color-primary` → Kategorie: "Color"  
-- `--sui-spacing-small` → Kategorie: "Spacing"
+**Beispiel mit Präfix `--enc-`:**
+- `--enc-background-primary` → Kategorie: "Background"
+- `--enc-color-primary` → Kategorie: "Color"  
+- `--enc-spacing-small` → Kategorie: "Spacing"
 
 ## Technische Details
 
