@@ -1,7 +1,16 @@
-import { ActionPanel, List, Action, Icon, showToast, Toast, getPreferenceValues, openExtensionPreferences, Clipboard } from "@raycast/api";
+import {
+  ActionPanel,
+  List,
+  Action,
+  Icon,
+  showToast,
+  Toast,
+  getPreferenceValues,
+  openExtensionPreferences,
+  Clipboard,
+} from "@raycast/api";
 import { useState, useEffect } from "react";
 import * as fs from "fs";
-import * as path from "path";
 import * as https from "https";
 import * as http from "http";
 
@@ -26,21 +35,21 @@ interface CacheEntry {
 }
 
 // Einfacher Cache für die CSS-Variablen
-let cssCache: Map<string, CacheEntry> = new Map();
+const cssCache: Map<string, CacheEntry> = new Map();
 
 // Hilfsfunktion um Kategorien basierend auf Präfix zu erkennen
 const detectCategory = (variableName: string, filterPrefix: string): string => {
-  if (!filterPrefix || filterPrefix.trim() === '') {
-    return 'Alle';
+  if (!filterPrefix || filterPrefix.trim() === "") {
+    return "Alle";
   }
-  
+
   const prefix = filterPrefix.trim();
-  
+
   // Prüfe ob der Variablenname mit dem Präfix beginnt
   if (variableName.startsWith(prefix)) {
     // Extrahiere den Teil nach dem Präfix
     const afterPrefix = variableName.substring(prefix.length);
-    
+
     // Finde das erste Wort nach dem Präfix (bis zum ersten Bindestrich oder Ende)
     const firstWordMatch = afterPrefix.match(/^([a-zA-Z0-9]+)/);
     if (firstWordMatch) {
@@ -48,53 +57,65 @@ const detectCategory = (variableName: string, filterPrefix: string): string => {
       return category.charAt(0).toUpperCase() + category.slice(1);
     }
   }
-  
-  return 'Andere';
+
+  return "Andere";
 };
 
 // Hilfsfunktion um zu prüfen, ob ein Wert eine Farbe ist
 const isColorValue = (value: string): boolean => {
   const trimmedValue = value.trim();
-  
+
   // Hex-Farben (#fff, #ffffff)
   if (/^#[0-9a-fA-F]{3,8}$/.test(trimmedValue)) return true;
-  
+
   // RGB/RGBA Farben
   if (/^rgba?\(/.test(trimmedValue)) return true;
-  
+
   // HSL/HSLA Farben
   if (/^hsla?\(/.test(trimmedValue)) return true;
-  
+
   // Named colors (nur grundlegende Farben)
   const namedColors = [
-    'red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink', 'brown',
-    'black', 'white', 'gray', 'grey', 'transparent', 'currentColor'
+    "red",
+    "green",
+    "blue",
+    "yellow",
+    "orange",
+    "purple",
+    "pink",
+    "brown",
+    "black",
+    "white",
+    "gray",
+    "grey",
+    "transparent",
+    "currentColor",
   ];
   if (namedColors.includes(trimmedValue.toLowerCase())) return true;
-  
+
   // CSS-Variablen die auf Farben verweisen (Aliases)
   if (/^var\(--/.test(trimmedValue)) return true;
-  
+
   return false;
 };
 
 // Hilfsfunktion um eine Farbe in einen Hex-Wert zu konvertieren
 const colorToHex = (value: string, cssVariables?: CSSVariable[]): string => {
   const trimmedValue = value.trim();
-  
+
   // CSS-Variablen-Alias (var(--variable-name))
   if (/^var\(--/.test(trimmedValue)) {
     const varMatch = trimmedValue.match(/var\(--([^)]+)\)/);
     if (varMatch && cssVariables) {
       const varName = `--${varMatch[1]}`;
-      const referencedVar = cssVariables.find(v => v.name === varName);
+      const referencedVar = cssVariables.find((v) => v.name === varName);
       if (referencedVar) {
         return colorToHex(referencedVar.value, cssVariables);
       }
     }
-    return '#000000'; // Fallback für unbekannte Variablen
+    return "#000000"; // Fallback für unbekannte Variablen
   }
-  
+
   // Bereits Hex-Farbe
   if (/^#[0-9a-fA-F]{3,8}$/.test(trimmedValue)) {
     // 3-stellige Hex zu 6-stellig konvertieren
@@ -103,16 +124,16 @@ const colorToHex = (value: string, cssVariables?: CSSVariable[]): string => {
     }
     return trimmedValue.toLowerCase();
   }
-  
+
   // RGB zu Hex
   const rgbMatch = trimmedValue.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (rgbMatch) {
     const r = parseInt(rgbMatch[1]);
     const g = parseInt(rgbMatch[2]);
     const b = parseInt(rgbMatch[3]);
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   }
-  
+
   // HSL zu Hex (vereinfacht)
   const hslMatch = trimmedValue.match(/^hsla?\((\d+),\s*(\d+)%,\s*(\d+)%/);
   if (hslMatch) {
@@ -120,60 +141,89 @@ const colorToHex = (value: string, cssVariables?: CSSVariable[]): string => {
     const s = parseInt(hslMatch[2]);
     const l = parseInt(hslMatch[3]);
     // Vereinfachte HSL zu RGB Konvertierung
-    const c = (1 - Math.abs(2 * l / 100 - 1)) * s / 100;
-    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const c = ((1 - Math.abs((2 * l) / 100 - 1)) * s) / 100;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
     const m = l / 100 - c / 2;
     let r, g, b;
-    
-    if (h < 60) { r = c; g = x; b = 0; }
-    else if (h < 120) { r = x; g = c; b = 0; }
-    else if (h < 180) { r = 0; g = c; b = x; }
-    else if (h < 240) { r = 0; g = x; b = c; }
-    else if (h < 300) { r = x; g = 0; b = c; }
-    else { r = c; g = 0; b = x; }
-    
+
+    if (h < 60) {
+      r = c;
+      g = x;
+      b = 0;
+    } else if (h < 120) {
+      r = x;
+      g = c;
+      b = 0;
+    } else if (h < 180) {
+      r = 0;
+      g = c;
+      b = x;
+    } else if (h < 240) {
+      r = 0;
+      g = x;
+      b = c;
+    } else if (h < 300) {
+      r = x;
+      g = 0;
+      b = c;
+    } else {
+      r = c;
+      g = 0;
+      b = x;
+    }
+
     r = Math.round((r + m) * 255);
     g = Math.round((g + m) * 255);
     b = Math.round((b + m) * 255);
-    
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   }
-  
+
   // Named colors zu Hex (nur grundlegende Farben)
   const colorMap: { [key: string]: string } = {
-    'red': '#ff0000', 'green': '#008000', 'blue': '#0000ff', 'yellow': '#ffff00',
-    'orange': '#ffa500', 'purple': '#800080', 'pink': '#ffc0cb', 'brown': '#a52a2a',
-    'black': '#000000', 'white': '#ffffff', 'gray': '#808080', 'grey': '#808080',
-    'transparent': 'transparent', 'currentColor': 'currentColor'
+    red: "#ff0000",
+    green: "#008000",
+    blue: "#0000ff",
+    yellow: "#ffff00",
+    orange: "#ffa500",
+    purple: "#800080",
+    pink: "#ffc0cb",
+    brown: "#a52a2a",
+    black: "#000000",
+    white: "#ffffff",
+    gray: "#808080",
+    grey: "#808080",
+    transparent: "transparent",
+    currentColor: "currentColor",
   };
-  
-  return colorMap[trimmedValue.toLowerCase()] || '#000000';
+
+  return colorMap[trimmedValue.toLowerCase()] || "#000000";
 };
 
 // Hilfsfunktion zum Laden von URLs
 const fetchUrl = (url: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
-    const isHttps = urlObj.protocol === 'https:';
+    const isHttps = urlObj.protocol === "https:";
     const client = isHttps ? https : http;
-    
+
     const options = {
       hostname: urlObj.hostname,
       port: urlObj.port || (isHttps ? 443 : 80),
       path: urlObj.pathname + urlObj.search,
-      method: 'GET',
+      method: "GET",
       headers: {
-        'User-Agent': 'CSS Variables Searcher/1.0'
-      }
+        "User-Agent": "CSS Variables Searcher/1.0",
+      },
     };
 
     const req = client.request(options, (res) => {
       if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-        let data = '';
-        res.on('data', (chunk) => {
+        let data = "";
+        res.on("data", (chunk) => {
           data += chunk;
         });
-        res.on('end', () => {
+        res.on("end", () => {
           resolve(data);
         });
       } else {
@@ -181,13 +231,13 @@ const fetchUrl = (url: string): Promise<string> => {
       }
     });
 
-    req.on('error', (err) => {
+    req.on("error", (err) => {
       reject(err);
     });
 
     req.setTimeout(10000, () => {
       req.destroy();
-      reject(new Error('Request timeout'));
+      reject(new Error("Request timeout"));
     });
 
     req.end();
@@ -206,7 +256,7 @@ export default function Command() {
 
   const parseCSSVariables = (cssContent: string): CSSVariable[] => {
     const variables: CSSVariable[] = [];
-    
+
     // CSS-Variablen parsen
     const cssRegex = /(?:(--[a-zA-Z0-9-]+)\s*:\s*([^;]+);?)/g;
     let match;
@@ -242,15 +292,14 @@ export default function Command() {
       } else {
         throw new Error("Bitte konfigurieren Sie entweder einen CSS-Dateipfad oder eine CSS-URL in den Einstellungen");
       }
-
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unbekannter Fehler";
       setError(errorMessage);
-      
+
       await showToast({
         style: Toast.Style.Failure,
         title: "Fehler beim Laden der CSS-Datei",
-        message: errorMessage
+        message: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -270,7 +319,7 @@ export default function Command() {
     // Prüfe Cache
     const stats = fs.statSync(preferences.cssFilePath);
     const cachedEntry = cssCache.get(preferences.cssFilePath);
-    
+
     if (cachedEntry && cachedEntry.mtime === stats.mtime.getTime() && !cachedEntry.isUrl) {
       setCssVariables(cachedEntry.variables);
       return;
@@ -284,7 +333,7 @@ export default function Command() {
     cssCache.set(preferences.cssFilePath, {
       mtime: stats.mtime.getTime(),
       variables: variables,
-      isUrl: false
+      isUrl: false,
     });
 
     setCssVariables(variables);
@@ -293,7 +342,7 @@ export default function Command() {
       await showToast({
         style: Toast.Style.Animated,
         title: "Keine CSS-Variablen gefunden",
-        message: "Die CSS-Datei enthält keine benutzerdefinierten Eigenschaften (--variablen)"
+        message: "Die CSS-Datei enthält keine benutzerdefinierten Eigenschaften (--variablen)",
       });
     }
   };
@@ -312,7 +361,7 @@ export default function Command() {
 
     // Prüfe Cache (für URLs verwenden wir einen einfachen Cache ohne mtime)
     const cachedEntry = cssCache.get(preferences.cssFileUrl);
-    
+
     if (cachedEntry && cachedEntry.isUrl) {
       setCssVariables(cachedEntry.variables);
       return;
@@ -327,7 +376,7 @@ export default function Command() {
       mtime: Date.now(), // Für URLs verwenden wir aktuelle Zeit
       variables: variables,
       isUrl: true,
-      url: preferences.cssFileUrl
+      url: preferences.cssFileUrl,
     });
 
     setCssVariables(variables);
@@ -336,7 +385,7 @@ export default function Command() {
       await showToast({
         style: Toast.Style.Animated,
         title: "Keine CSS-Variablen gefunden",
-        message: "Die CSS-Datei enthält keine benutzerdefinierten Eigenschaften (--variablen)"
+        message: "Die CSS-Datei enthält keine benutzerdefinierten Eigenschaften (--variablen)",
       });
     }
   };
@@ -347,13 +396,13 @@ export default function Command() {
       await showToast({
         style: Toast.Style.Success,
         title: "Variablenname kopiert",
-        message: variableName
+        message: variableName,
       });
-    } catch (err) {
+    } catch {
       await showToast({
         style: Toast.Style.Failure,
         title: "Fehler beim Kopieren",
-        message: "Konnte nicht in die Zwischenablage kopieren"
+        message: "Konnte nicht in die Zwischenablage kopieren",
       });
     }
   };
@@ -365,13 +414,13 @@ export default function Command() {
       await showToast({
         style: Toast.Style.Success,
         title: "Variablenname mit var() kopiert",
-        message: varFormat
+        message: varFormat,
       });
-    } catch (err) {
+    } catch {
       await showToast({
         style: Toast.Style.Failure,
         title: "Fehler beim Kopieren",
-        message: "Konnte nicht in die Zwischenablage kopieren"
+        message: "Konnte nicht in die Zwischenablage kopieren",
       });
     }
   };
@@ -382,13 +431,13 @@ export default function Command() {
       await showToast({
         style: Toast.Style.Success,
         title: "Wert kopiert",
-        message: `${variableName}: ${value}`
+        message: `${variableName}: ${value}`,
       });
-    } catch (err) {
+    } catch {
       await showToast({
         style: Toast.Style.Failure,
         title: "Fehler beim Kopieren",
-        message: "Konnte nicht in die Zwischenablage kopieren"
+        message: "Konnte nicht in die Zwischenablage kopieren",
       });
     }
   };
@@ -401,8 +450,8 @@ export default function Command() {
   const getAvailableCategories = (variables: CSSVariable[]): string[] => {
     const categories = new Set<string>();
     categories.add("Alle");
-    variables.forEach(variable => {
-      if (variable.category && variable.category !== 'Alle') {
+    variables.forEach((variable) => {
+      if (variable.category && variable.category !== "Alle") {
         categories.add(variable.category);
       }
     });
@@ -414,12 +463,12 @@ export default function Command() {
     if (category === "Alle") {
       return variables;
     }
-    return variables.filter(variable => variable.category === category);
+    return variables.filter((variable) => variable.category === category);
   };
 
   // Erweiterte Suchfunktion mit mehreren Suchbegriffen
   const advancedSearch = (variables: CSSVariable[], searchQuery: string): CSSVariable[] => {
-    if (!searchQuery || searchQuery.trim() === '') {
+    if (!searchQuery || searchQuery.trim() === "") {
       return variables;
     }
 
@@ -427,20 +476,20 @@ export default function Command() {
     const searchTerms = searchQuery
       .toLowerCase()
       .split(/\s+/)
-      .filter(term => term.length > 0);
+      .filter((term) => term.length > 0);
 
-    return variables.filter(variable => {
+    return variables.filter((variable) => {
       const searchableText = `${variable.name} ${variable.value}`.toLowerCase();
-      
+
       // Alle Suchbegriffe müssen gefunden werden (AND-Logik)
-      return searchTerms.every(term => searchableText.includes(term));
+      return searchTerms.every((term) => searchableText.includes(term));
     });
   };
 
   // Entferne Duplikate basierend auf Variablennamen
   const removeDuplicates = (variables: CSSVariable[]): CSSVariable[] => {
     const seen = new Set<string>();
-    return variables.filter(variable => {
+    return variables.filter((variable) => {
       if (seen.has(variable.name)) {
         return false;
       }
@@ -452,15 +501,15 @@ export default function Command() {
   // Gruppiere Variablen nach Kategorien für Sektionen
   const groupVariablesByCategory = (variables: CSSVariable[]): { [category: string]: CSSVariable[] } => {
     const grouped: { [category: string]: CSSVariable[] } = {};
-    
-    variables.forEach(variable => {
-      const category = variable.category || 'Andere';
+
+    variables.forEach((variable) => {
+      const category = variable.category || "Andere";
       if (!grouped[category]) {
         grouped[category] = [];
       }
       grouped[category].push(variable);
     });
-    
+
     return grouped;
   };
 
@@ -485,16 +534,8 @@ export default function Command() {
           subtitle={error}
           actions={
             <ActionPanel>
-              <Action
-                title="Einstellungen öffnen"
-                icon={Icon.Gear}
-                onAction={openSettings}
-              />
-              <Action
-                title="Erneut versuchen"
-                icon={Icon.ArrowClockwise}
-                onAction={loadCSSVariables}
-              />
+              <Action title="Open Settings" icon={Icon.Gear} onAction={openSettings} />
+              <Action title="Retry" icon={Icon.ArrowClockwise} onAction={loadCSSVariables} />
             </ActionPanel>
           }
         />
@@ -502,39 +543,17 @@ export default function Command() {
     );
   }
 
-  const getSourceInfo = () => {
-    if (preferences.cssFilePath && preferences.cssFilePath.trim() !== "") {
-      return `Lokale Datei: ${path.basename(preferences.cssFilePath)}`;
-    } else if (preferences.cssFileUrl && preferences.cssFileUrl.trim() !== "") {
-      try {
-        const url = new URL(preferences.cssFileUrl);
-        return `URL: ${url.hostname}${url.pathname}`;
-      } catch {
-        return `URL: ${preferences.cssFileUrl}`;
-      }
-    }
-    return "Keine Quelle konfiguriert";
-  };
-
   const availableCategories = getAvailableCategories(cssVariables);
 
   return (
-    <List 
-      isLoading={isLoading} 
+    <List
+      isLoading={isLoading}
       searchBarPlaceholder="CSS-Variablen durchsuchen... (z.B. 'foreground primary', 'background color')"
       onSearchTextChange={setSearchText}
       searchBarAccessory={
-        <List.Dropdown 
-          tooltip="Kategorie filtern" 
-          value={selectedCategory}
-          onChange={setSelectedCategory}
-        >
+        <List.Dropdown tooltip="Kategorie filtern" value={selectedCategory} onChange={setSelectedCategory}>
           {availableCategories.map((category) => (
-            <List.Dropdown.Item 
-              key={category}
-              title={category} 
-              value={category} 
-            />
+            <List.Dropdown.Item key={category} title={category} value={category} />
           ))}
         </List.Dropdown>
       }
@@ -544,23 +563,23 @@ export default function Command() {
         const uniqueVariables = removeDuplicates(filteredVariables);
         // Gruppiere nach Kategorien
         const grouped = groupVariablesByCategory(uniqueVariables);
-        
+
         // Sortiere Kategorien alphabetisch, aber "Alle" und "Andere" am Ende
         const sortedCategories = Object.keys(grouped).sort((a, b) => {
-          if (a === 'Alle') return 1;
-          if (b === 'Alle') return -1;
-          if (a === 'Andere') return 1;
-          if (b === 'Andere') return -1;
+          if (a === "Alle") return 1;
+          if (b === "Alle") return -1;
+          if (a === "Andere") return 1;
+          if (b === "Andere") return -1;
           return a.localeCompare(b);
         });
-        
+
         return sortedCategories.map((category) => (
           <List.Section key={category} title={category}>
             {grouped[category].map((variable, index) => {
               const isColor = isColorValue(variable.value);
               const colorHex = isColor ? colorToHex(variable.value, cssVariables) : null;
               const shouldShowColorPreview = preferences.showColorPreview && isColor;
-              
+
               return (
                 <List.Item
                   key={`${variable.name}-${index}`}
@@ -571,32 +590,24 @@ export default function Command() {
                   actions={
                     <ActionPanel>
                       <Action
-                        title="Variablenname kopieren"
+                        title="Copy Variable Name"
                         icon={Icon.Clipboard}
                         onAction={() => copyVariableName(variable.name)}
                       />
                       <Action
-                        title="Variablenname mit var() kopieren"
+                        title="Copy Variable Name with Var()"
                         icon={Icon.Clipboard}
                         onAction={() => copyVariableNameWithVar(variable.name)}
                         shortcut={{ modifiers: ["shift"], key: "enter" }}
                       />
                       <Action
-                        title="Wert kopieren"
+                        title="Copy Value"
                         icon={Icon.Clipboard}
                         onAction={() => copyValue(variable.value, variable.name)}
                         shortcut={{ modifiers: ["cmd", "shift"], key: "enter" }}
                       />
-                      <Action
-                        title="Einstellungen öffnen"
-                        icon={Icon.Gear}
-                        onAction={openSettings}
-                      />
-                      <Action
-                        title="Aktualisieren"
-                        icon={Icon.ArrowClockwise}
-                        onAction={loadCSSVariables}
-                      />
+                      <Action title="Open Settings" icon={Icon.Gear} onAction={openSettings} />
+                      <Action title="Refresh" icon={Icon.ArrowClockwise} onAction={loadCSSVariables} />
                     </ActionPanel>
                   }
                 />
@@ -608,4 +619,3 @@ export default function Command() {
     </List>
   );
 }
-

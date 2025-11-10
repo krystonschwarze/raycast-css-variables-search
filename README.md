@@ -1,110 +1,68 @@
 # CSS Variables Searcher
 
-Eine Raycast-Erweiterung zum Durchsuchen und Kopieren von CSS-Variablen aus Ihren CSS-Dateien.
-
-## Features
-
-- 🔍 **Erweiterte Suche**: Finden Sie CSS-Variablen mit mehreren Suchbegriffen (z.B. "foreground primary", "background color")
-- 📋 **Flexibles Kopieren**: Kopieren Sie Variablenwerte, -namen oder var() Format
-- 🎨 **Farbvorschau**: Farbige Kreise zeigen CSS-Farbwerte visuell an
-- 🏷️ **Konfigurierbare Filterung**: Präfix-basierte Kategorisierung und Filterung von CSS-Variablen
-- ⚡ **Performance**: Intelligentes Caching für schnelle Ladezeiten
-- 🛠️ **Konfigurierbar**: Wählen Sie Ihre CSS-Datei oder URL in den Raycast-Einstellungen aus
-- 🎯 **Benutzerfreundlich**: Intuitive Benutzeroberfläche mit Fehlerbehandlung
+Raycast-Erweiterung zum Suchen und Kopieren von CSS-Variablen.
 
 ## Installation
 
-1. Laden Sie die Erweiterung in Raycast herunter oder klonen Sie dieses Repository
-2. Öffnen Sie die Raycast-Einstellungen
-3. Navigieren Sie zu "CSS Variables Searcher" in den Erweiterungen
-4. Konfigurieren Sie den Pfad zu Ihrer CSS-Datei im Feld "CSS File Path"
+1. Repository klonen oder in Raycast installieren
+2. In den Raycast-Einstellungen den Pfad zu deiner CSS-Datei angeben (oder eine URL)
 
 ## Verwendung
 
-1. Öffnen Sie Raycast (⌘ + Leertaste)
-2. Tippen Sie "CSS Variables Searcher" oder verwenden Sie das Kürzel
-3. Verwenden Sie das Dropdown, um nach Kategorien zu filtern (basierend auf Ihrem konfigurierten Präfix)
-4. Durchsuchen Sie Ihre CSS-Variablen mit erweiterten Suchbegriffen:
-   - **Einzelne Begriffe**: `primary`, `color`, `spacing`
-   - **Mehrere Begriffe**: `foreground primary`, `background color`, `font size`
-   - **Kombinierte Suche**: `enc color primary` (findet alle Variablen, die alle drei Begriffe enthalten)
-5. Verwenden Sie die Tastenkombinationen oder Aktionen:
-   - **Enter**: Kopiert den Variablennamen (z.B. `--primary-color`) - automatisch für die erste Action
-   - **Shift+Enter**: Kopiert den Variablennamen mit var() Format (z.B. `var(--primary-color)`)
-   - **Cmd+Shift+Enter**: Kopiert den CSS-Variablenwert (z.B. `#336699`)
-   - **Einstellungen öffnen**: Öffnet die Erweiterungseinstellungen
-   - **Aktualisieren**: Lädt die CSS-Datei erneut
+Öffne Raycast und starte "CSS Variables Searcher". Die Erweiterung lädt automatisch deine CSS-Datei und zeigt alle `--variablen` an.
+
+### Suche
+
+Du kannst nach Variablennamen oder Werten suchen. Mehrere Suchbegriffe mit Leerzeichen getrennt funktionieren auch – alle Begriffe müssen gefunden werden (AND-Logik).
+
+Beispiele:
+- `primary` findet alle Variablen mit "primary" im Namen oder Wert
+- `foreground primary` findet Variablen, die beide Begriffe enthalten
+- `enc color` findet Variablen mit "enc" und "color"
+
+### Kategorien
+
+Wenn du ein Präfix in den Einstellungen angibst (z.B. `--enc-`), werden Variablen automatisch in Kategorien gruppiert. Das Dropdown oben rechts filtert nach diesen Kategorien.
+
+Beispiel: `--enc-background-primary` wird zur Kategorie "Background", `--enc-color-primary` zu "Color".
+
+### Kopieren
+
+- **Enter**: Kopiert den Variablennamen (z.B. `--primary-color`)
+- **Shift+Enter**: Kopiert mit `var()` Format (z.B. `var(--primary-color)`)
+- **Cmd+Shift+Enter**: Kopiert den Wert (z.B. `#336699`)
+
+### Farbvorschau
+
+Wenn eine Variable einen Farbwert enthält (hex, rgb, hsl, etc.), wird ein farbiger Kreis als Icon angezeigt. Das kannst du in den Einstellungen deaktivieren.
 
 ## Konfiguration
 
-Die Erweiterung unterstützt zwei Quellen für CSS-Dateien:
+**CSS File Path**: Pfad zu einer lokalen CSS-Datei  
+**CSS File URL**: URL zu einer gehosteten CSS-Datei  
+**Show Color Preview**: Farbvorschau ein/aus  
+**Filter Prefix**: Präfix für Kategorisierung (z.B. `--enc-`, `--theme-`)
 
-### 1. Lokale Datei
-Geben Sie den Pfad zu einer lokalen CSS-Datei an, die CSS-Variablen (Custom Properties) enthält.
+Lokale Dateien haben Vorrang vor URLs. Wenn beide gesetzt sind, wird die lokale Datei verwendet.
 
-### 2. Gehostete URL
-Geben Sie eine URL zu einer gehosteten CSS-Datei an. Die Erweiterung lädt die Datei automatisch herunter.
-
-**Hinweis**: Lokale Dateien haben Priorität über URLs. Wenn beide konfiguriert sind, wird die lokale Datei verwendet.
-
-### Zusätzliche Einstellungen
-
-- **Show Color Preview**: Aktivieren/deaktivieren Sie die farbigen Kreis-Icons für CSS-Farbwerte (Standard: aktiviert)
-- **Filter Prefix**: Präfix für die Kategorisierung (z.B. `--enc-`, `--theme-`)
-
-CSS-Variablen werden durch das `--` Präfix definiert:
+## Beispiel CSS
 
 ```css
 :root {
   --primary-color: #336699;
   --font-size-base: 1rem;
-  --spacing-4: 1rem;
   
-  /* Mit Präfix --enc- für Kategorisierung */
+  /* Mit Präfix für Kategorisierung */
   --enc-background-primary: #ffffff;
-  --enc-background-secondary: #f8f9fa;
   --enc-color-primary: #336699;
-  --enc-color-secondary: #6c757d;
   --enc-spacing-small: 0.5rem;
-  --enc-spacing-medium: 1rem;
-  --enc-spacing-large: 1.5rem;
 }
 ```
-
-**Beispiel mit Präfix `--enc-`:**
-- `--enc-background-primary` → Kategorie: "Background"
-- `--enc-color-primary` → Kategorie: "Color"  
-- `--enc-spacing-small` → Kategorie: "Spacing"
-
-## Technische Details
-
-- **Caching**: 
-  - Lokale Dateien: Caching basierend auf Datei-Modifikationszeit
-  - URLs: Einfaches Caching für bessere Performance
-- **Fehlerbehandlung**: Umfassende Fehlerbehandlung mit benutzerfreundlichen Nachrichten
-- **Performance**: Optimiert für große CSS-Dateien mit vielen Variablen
-- **Kompatibilität**: Funktioniert mit allen CSS-Dateien, die CSS Custom Properties verwenden
-- **URL-Unterstützung**: Automatisches Herunterladen und Parsen von gehosteten CSS-Dateien
-- **Priorisierung**: Lokale Dateien haben Vorrang vor URLs
-- **Farbvorschau**: Automatische Erkennung und visuelle Darstellung von CSS-Farbwerten
-- **Flexible Kopier-Optionen**: Verschiedene Formate für das Kopieren von Variablen
-- **Erweiterte Suchfunktion**: Mehrere Suchbegriffe mit Leerzeichen getrennt (AND-Logik)
-- **Konfigurierbare Kategorisierung**: Präfix-basierte Kategorisierung von CSS-Variablen
-- **Flexible Filterung**: Benutzerdefinierte Präfixe für maßgeschneiderte Kategorien
-- **Kategorie-Filter**: Dropdown-Filter für bessere Organisation und Navigation
 
 ## Entwicklung
 
 ```bash
-# Dependencies installieren
 npm install
-
-# Entwicklungsserver starten
 npm run dev
-
-# Build erstellen
 npm run build
-
-# Linting
-npm run lint
 ```

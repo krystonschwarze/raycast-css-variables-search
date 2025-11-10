@@ -5,6 +5,7 @@
   "description": "Search and copy CSS custom properties from your CSS file",
   "icon": "extension-icon.png",
   "author": "kryston_schwarze",
+  "owner": "neo-enercity",
   "license": "MIT",
   "commands": [
     {
@@ -27,7 +28,7 @@
       "title": "CSS File URL",
       "description": "URL to a hosted CSS file containing custom properties",
       "type": "textfield",
-      "required": false,
+      "required": true,
       "placeholder": "https://example.com/styles.css"
     },
     {
@@ -35,17 +36,18 @@
       "title": "Show Color Preview",
       "description": "Display colored circle icons for color variables",
       "type": "checkbox",
+      "label": "Enable color preview",
       "required": false,
       "default": true
     },
     {
       "name": "filterPrefix",
       "title": "Filter Prefix",
-      "description": "Prefix for custom filtering (e.g., --sui-, --theme-)",
+      "description": "Prefix for custom filtering (e.g., --enc-, --theme-)",
       "type": "textfield",
       "required": false,
-      "default": "--sui-",
-      "placeholder": "--sui-"
+      "default": "--enc-",
+      "placeholder": "--enc-"
     }
   ],
   "dependencies": {
