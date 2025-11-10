@@ -1,15 +1,15 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "css-variables-search",
-  "title": "CSS Variables Search",
-  "description": "",
+  "name": "css-variables-searcher",
+  "title": "CSS Variables Searcher",
+  "description": "Search and copy CSS custom properties from your CSS file",
   "icon": "extension-icon.png",
   "author": "kryston_schwarze",
   "license": "MIT",
   "commands": [
     {
       "name": "search-css-variables",
-      "title": "Search CSS Variables",
+      "title": "CSS Variables Searcher",
       "description": "Search and copy CSS custom properties from your CSS file",
       "mode": "view"
     }
@@ -20,7 +20,32 @@
       "title": "CSS File Path",
       "description": "Path to the CSS file containing custom properties",
       "type": "directory",
-      "required": true
+      "required": false
+    },
+    {
+      "name": "cssFileUrl",
+      "title": "CSS File URL",
+      "description": "URL to a hosted CSS file containing custom properties",
+      "type": "textfield",
+      "required": false,
+      "placeholder": "https://example.com/styles.css"
+    },
+    {
+      "name": "showColorPreview",
+      "title": "Show Color Preview",
+      "description": "Display colored circle icons for color variables",
+      "type": "checkbox",
+      "required": false,
+      "default": true
+    },
+    {
+      "name": "filterPrefix",
+      "title": "Filter Prefix",
+      "description": "Prefix for custom filtering (e.g., --sui-, --theme-)",
+      "type": "textfield",
+      "required": false,
+      "default": "--sui-",
+      "placeholder": "--sui-"
     }
   ],
   "dependencies": {
